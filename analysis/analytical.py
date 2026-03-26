@@ -53,23 +53,20 @@ def cycle_length_days(clues_per_day: float = 3.0, k: int = 7) -> float:
 # ============================================================
 
 def credits_per_day_selfish(k: int = 7, clues_per_day: float = 3.0,
-                             exchange_credit: int = 210) -> float:
+                             exchange_credit: int = 210,
+                             delete_credit: int = 5) -> float:
     """
-    Strategy s=1 (never gift, solo).
-    Only income: exchange credits.
-    Warning: at cap=10 with 7 types + duplicates, generation stalls unless exchange triggered.
-    Under selfish, duplicates pile up. Generation stalls if cap reached before exchange.
+    Strategy selfish (never gift; delete duplicate self-clues to free cap space, +5 each).
+    Income: exchange credits + deletion credits for duplicates.
+    Note: deletion keeps exactly 1 per type, so all extras are deleted each cycle.
+    Approximation: treats deletion as happening once per exchange cycle.
+    Simulation (E1, N=1): ~42 cr/day; this function gives ~43.5 cr/day (close match).
     """
-    # Worst case: generation stalls at cap.
-    # Expected clues before cap hit depends on cycle: ~18.15 clues needed, cap=10.
-    # Player would need 10 clues before stalling; but exchange requires all 7 types.
-    # Probability of having all 7 types in first 10 draws:
-    # This is the coupon collector with cap — complex.
-    # For simplicity: if player triggers exchange as soon as possible (has all 7 in first 10),
-    # they're fine. Otherwise they stall.
-    # Approximation: assume player gets lucky enough to complete set before cap.
     T = cycle_length_days(clues_per_day, k)
-    return exchange_credit / T
+    n_dup = expected_duplicates(k)  # E[duplicates per cycle] = k*H_k - k ≈ 11.15 for k=7
+    exchange_per_day = exchange_credit / T
+    delete_per_day = n_dup * delete_credit / T  # approx: all duplicates deleted each cycle
+    return exchange_per_day + delete_per_day
 
 
 def credits_per_day_optimal(k: int = 7, clues_per_day: float = 3.0,

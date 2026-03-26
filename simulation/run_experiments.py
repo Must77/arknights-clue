@@ -153,10 +153,10 @@ def experiment_e3():
     for strat in Strategy:
         strats = [strat] * N
         res = run_config(strats, UNIFORM_PROBS, shop_capacity=9999, n_days=N_DAYS)
-        cpd = res[0]['credits_per_day']
         group = res['_group_credits_per_day']
-        exc = res[0]['exchange_rate_per_day']
-        exp = res[0].get('recv_expired', 0)
+        cpd = round(group / N, 2)
+        exc = round(sum(res[pid].get('exchange_rate_per_day', 0) for pid in range(N)) / N, 4)
+        exp = round(sum(res[pid].get('recv_expired', 0) for pid in range(N)) / N, 1)
         print(f"  {strat.value:20s} {cpd:>15.2f} {group:>15.2f} {exc:>10.4f} {exp:>11.1f}")
 
 
