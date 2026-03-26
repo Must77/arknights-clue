@@ -1,9 +1,13 @@
 """
-Experiment runner for Arknights Clue Gifting Study (v3).
+Experiment runner for Arknights Clue Gifting Study (v4).
+
+Changes from v3:
+  - recv_clues now expire after 10 days (game-accurate)
+  - E2 capped at N=50 for local compute (N=80/125 → supercomputer)
 
 Experiments:
   E1: Solo baseline — all strategies, uniform vs nonuniform
-  E2: Group size effect — N in {1,2,5,10,20,50,80,125}, all using S*, uniform
+  E2: Group size effect — N in {1,2,5,10,20,50}, all using S*, uniform
   E3: Homogeneous strategy comparison — all N players use same strategy (N=10)
   E4: Mixed strategies — what happens when one defects from S*?
   E5: Shop capacity sensitivity — S=300,400,600,800,∞
@@ -120,20 +124,18 @@ def experiment_e2():
     print("\n" + "=" * 60)
     print("E2: GROUP SIZE EFFECT (all players use S*, uniform, shop=∞)")
     print("=" * 60)
-    print(f"  {'N':>4} {'cr/day (per player)':>22} {'group cr/day':>15} {'exch/day':>10} {'gifts_in':>10}")
-    print(f"  {'-'*4} {'-'*22} {'-'*15} {'-'*10} {'-'*10}")
+    print(f"  {'N':>4} {'cr/day (per player)':>22} {'group cr/day':>15} {'exch/day':>10} {'gifts_in':>10} {'expired':>10}")
+    print(f"  {'-'*4} {'-'*22} {'-'*15} {'-'*10} {'-'*10} {'-'*10}")
 
-    for N in [1, 2, 5, 10, 20, 50, 80, 125]:
-        # Use fewer runs for large N to keep runtime reasonable
-        runs = max(5, N_RUNS // (1 + N // 30))
+    for N in [1, 2, 5, 10, 20, 50]:
         strats = [Strategy.OPTIMAL] * N
-        res = run_config(strats, UNIFORM_PROBS, shop_capacity=9999,
-                         n_days=N_DAYS, n_runs=runs)
+        res = run_config(strats, UNIFORM_PROBS, shop_capacity=9999, n_days=N_DAYS)
         per_player = res[0]['credits_per_day']
         group_total = res['_group_credits_per_day']
         exc = res[0]['exchange_rate_per_day']
         gr = res[0]['gifts_received']
-        print(f"  {N:>4} {per_player:>22.2f} {group_total:>15.2f} {exc:>10.4f} {gr:>10.1f} (runs={runs})")
+        exp = res[0].get('recv_expired', 0)
+        print(f"  {N:>4} {per_player:>22.2f} {group_total:>15.2f} {exc:>10.4f} {gr:>10.1f} {exp:>10.1f}")
 
 
 # ============================================================
@@ -144,8 +146,8 @@ def experiment_e3():
     print("\n" + "=" * 60)
     print("E3: HOMOGENEOUS STRATEGIES (N=10, uniform, shop=∞)")
     print("=" * 60)
-    print(f"  {'Strategy':20s} {'cr/day/player':>15} {'group cr/day':>15} {'exch/day':>10}")
-    print(f"  {'-'*20} {'-'*15} {'-'*15} {'-'*10}")
+    print(f"  {'Strategy':20s} {'cr/day/player':>15} {'group cr/day':>15} {'exch/day':>10} {'expired/yr':>11}")
+    print(f"  {'-'*20} {'-'*15} {'-'*15} {'-'*10} {'-'*11}")
 
     N = 10
     for strat in Strategy:
@@ -154,7 +156,8 @@ def experiment_e3():
         cpd = res[0]['credits_per_day']
         group = res['_group_credits_per_day']
         exc = res[0]['exchange_rate_per_day']
-        print(f"  {strat.value:20s} {cpd:>15.2f} {group:>15.2f} {exc:>10.4f}")
+        exp = res[0].get('recv_expired', 0)
+        print(f"  {strat.value:20s} {cpd:>15.2f} {group:>15.2f} {exc:>10.4f} {exp:>11.1f}")
 
 
 # ============================================================

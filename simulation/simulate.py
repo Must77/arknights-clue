@@ -1,13 +1,13 @@
 """
-Arknights Clue Gifting Strategy Simulation (v3)
+Arknights Clue Gifting Strategy Simulation (v4)
 
-Changes from v2:
-- Two-source clue generation: daily 4AM (1/day fixed) + operator Poisson
-- NONUNIFORM_PROBS corrected: type 7 is +10pp higher (9/70 vs 16/70)
-- Blocking mechanic fixed: clues queue up, never discarded
-- OPTIMAL_TARGETED strategy: gift to friend who specifically needs the type
-- operator_bonus parameter (additive, excludes fixed ambiance +15%)
-- Ambiance bonus treated as constant +15% for all strategies
+Changes from v3:
+- recv_clues now expire after RECV_EXPIRY_DAYS = 10 days (matching game mechanic)
+  - tracked via recv_log: list of (day_received, clue_type)
+  - expired entries removed at start of each day
+  - _start_exchange removes oldest recv entry when consuming recv_clues
+- current_day stored as instance var so _do_gift can stamp recv_log
+- Tracks recv_expired counter per player
 """
 
 import numpy as np
@@ -24,6 +24,7 @@ CLUES_DAILY = 1              # fixed 4AM clue per day
 CLUE_BASE_HOURS = 20         # operator base generation time (no bonus)
 MAX_SELF_CLUES = 10
 SELF_CLUES_DELETE_TARGET = 8 # selfish: delete duplicates down to this level
+RECV_EXPIRY_DAYS = 10        # received clues expire after 10 days
 EXCHANGE_CREDIT = 210
 EXCHANGE_DURATION_DAYS = 1
 VISIT_CREDIT = 30
@@ -33,12 +34,11 @@ GIFT_CREDIT_GIVER = 20
 DELETE_CREDIT = 5
 GIFT_RECV_CREDITS = (15, 10, 5)
 DAILY_WALLET_CAP = 300
-AMBIANCE_BONUS = 0.15        # fixed +15% for all players, does not vary by strategy
+AMBIANCE_BONUS = 0.15        # fixed +15% for all players
 
 # Clue type probability distributions
 UNIFORM_PROBS = np.array([1.0 / N_TYPES] * N_TYPES)
-# Type 7 is 10 percentage points higher than types 1-6
-# Solve: 6*p + (p+0.10) = 1  =>  p = 9/70, p7 = 16/70
+# Type 7 is 10pp higher: solve 6p + (p+0.10) = 1 => p = 9/70, p7 = 16/70
 NONUNIFORM_PROBS = np.array([9/70] * 6 + [16/70])
 
 # Typical operator bonus (2×E2-5★ + Room Lv.3): 2×20% + 11% = 51%
@@ -69,7 +69,8 @@ class Player:
 
     self_clues: np.ndarray = field(default_factory=lambda: np.zeros(N_TYPES, dtype=int))
     recv_clues: np.ndarray = field(default_factory=lambda: np.zeros(N_TYPES, dtype=int))
-    clue_queue: list = field(default_factory=list)  # clues paused due to cap
+    recv_log: list = field(default_factory=list)   # (day_received, clue_type); sorted by day
+    clue_queue: list = field(default_factory=list) # clues paused due to cap
 
     wallet: float = 0.0
     total_spent: float = 0.0
@@ -85,6 +86,7 @@ class Player:
     gifts_given: int = 0
     gifts_received: int = 0
     clues_deleted: int = 0
+    recv_expired: int = 0    # number of received clues that expired unused
 
     @property
     def all_clues(self) -> np.ndarray:
@@ -137,6 +139,7 @@ class Simulator:
         # λ_operator = (24h / 20h) × (1 + operator_bonus + ambiance_bonus)
         self.lambda_operator = (24 / CLUE_BASE_HOURS) * (1 + operator_bonus + AMBIANCE_BONUS)
         self.rng = np.random.default_rng(seed)
+        self.current_day = 0  # set at start of each _step; used by _do_gift
 
         self.players = [
             Player(pid=i, strategy=strategies[i], clue_probs=clue_probs.copy())
@@ -151,6 +154,8 @@ class Simulator:
 
     # ----------------------------------------------------------
     def _step(self, day: int):
+        self.current_day = day
+
         # Weekly bookkeeping
         if day % 7 == 0 and day > 0:
             for p in self.players:
@@ -166,6 +171,10 @@ class Simulator:
                     p.earn(EXCHANGE_CREDIT)
                     p.exchange_count += 1
 
+        # Expire received clues (10-day limit)
+        for p in self.players:
+            self._expire_recv(p, day)
+
         # Generate new clues → queue (never discard)
         for p in self.players:
             t_daily = int(self.rng.choice(N_TYPES, p=self.clue_probs))
@@ -174,7 +183,7 @@ class Simulator:
             for t in self.rng.choice(N_TYPES, size=n_op, p=self.clue_probs):
                 p.clue_queue.append(int(t))
 
-        # Drain queue into inventory (gifting/deletion may free space for more)
+        # Drain queue into inventory (gifting may free space for more)
         for p in self.players:
             self._drain_queue(p)
 
@@ -214,8 +223,19 @@ class Simulator:
             })
 
     # ----------------------------------------------------------
+    def _expire_recv(self, p: Player, current_day: int):
+        """Remove received clues older than RECV_EXPIRY_DAYS."""
+        new_log = []
+        for (d, t) in p.recv_log:
+            if current_day - d >= RECV_EXPIRY_DAYS:
+                p.recv_clues[t] = max(0, p.recv_clues[t] - 1)
+                p.recv_expired += 1
+            else:
+                new_log.append((d, t))
+        p.recv_log = new_log
+
     def _drain_queue(self, p: Player):
-        """Move queued clues into inventory one by one (gifting/deletion may cascade)."""
+        """Move queued clues into inventory one by one."""
         remaining = []
         for t in p.clue_queue:
             if p.self_total < MAX_SELF_CLUES:
@@ -264,7 +284,7 @@ class Simulator:
         self._do_gift(giver, target, clue_type)
 
     def _gift_targeted(self, giver: Player, clue_type: int):
-        """Gift to a friend missing this type; fall back to random if none."""
+        """Gift to a friend missing this type (all_clues == 0); fall back to random."""
         needy = [q for q in self.players
                  if q.pid != giver.pid and q.all_clues[clue_type] == 0]
         if needy:
@@ -281,17 +301,24 @@ class Simulator:
         giver.gifts_given += 1
         giver.earn(GIFT_CREDIT_GIVER)
         target.recv_clues[clue_type] += 1
+        target.recv_log.append((self.current_day, clue_type))
         target.gifts_received += 1
         if target.recv_count_today < len(GIFT_RECV_CREDITS):
             target.earn(GIFT_RECV_CREDITS[target.recv_count_today])
         target.recv_count_today += 1
 
     def _start_exchange(self, p: Player):
+        """Consume 1 of each type (self_clues first, then recv_clues)."""
         for t in range(N_TYPES):
             if p.self_clues[t] > 0:
                 p.self_clues[t] -= 1
             else:
                 p.recv_clues[t] -= 1
+                # Remove the oldest recv_log entry of this type
+                for i, (d, rt) in enumerate(p.recv_log):
+                    if rt == t:
+                        p.recv_log.pop(i)
+                        break
         p.exchange_days_left = EXCHANGE_DURATION_DAYS
 
     def _do_visits(self, p: Player):
@@ -326,6 +353,7 @@ class Simulator:
                 'gifts_given': p.gifts_given,
                 'gifts_received': p.gifts_received,
                 'clues_deleted': p.clues_deleted,
+                'recv_expired': p.recv_expired,
                 'queue_remaining': len(p.clue_queue),
             }
         results['_group'] = {
