@@ -1,13 +1,15 @@
 """
-Arknights Clue Gifting Strategy Simulation (v4)
+Arknights Clue Gifting Strategy Simulation (v5)
 
-Changes from v3:
-- recv_clues now expire after RECV_EXPIRY_DAYS = 10 days (matching game mechanic)
-  - tracked via recv_log: list of (day_received, clue_type)
-  - expired entries removed at start of each day
-  - _start_exchange removes oldest recv entry when consuming recv_clues
-- current_day stored as instance var so _do_gift can stamp recv_log
-- Tracks recv_expired counter per player
+Changes from v4:
+- Outgoing visits now use U-shaped Beta-Binomial distribution instead of
+  fixed daily_visits=2, reflecting real player behavior:
+    * most days either visit ALL available friends or NONE (rarely partial)
+    * modeled as: visit_prob ~ Beta(α, β) with α=β=0.3 (U-shape)
+                  n_visits  = min(Binomial(n_avail, visit_prob), MAX_VISITS_OUT_PER_DAY)
+  Added constants: MAX_VISITS_OUT_PER_DAY=10, VISIT_ALPHA=0.3, VISIT_BETA=0.3
+- Simulator parameter daily_visits removed; replaced by visit_alpha, visit_beta
+- Player field visits_out_today removed (no longer needed as running counter)
 """
 
 import numpy as np
@@ -29,7 +31,15 @@ EXCHANGE_CREDIT = 210
 EXCHANGE_DURATION_DAYS = 1
 VISIT_CREDIT = 30
 MAX_VISITS_IN_PER_WEEK = 10
+MAX_VISITS_OUT_PER_DAY = 10     # game cap: at most 10 outgoing visits per day
 VISITED_CREDIT = 30
+
+# U-shaped Beta-Binomial parameters for outgoing visit behavior.
+# α = β < 1 → U-shape: players mostly visit all available friends OR none at all.
+# With α=β=0.3: P(visit none) ≈ 44%, P(visit all) ≈ 44%, P(partial) ≈ 12%.
+# E[visits | n_avail] = n_avail × α/(α+β) = n_avail × 0.5
+VISIT_ALPHA = 0.3
+VISIT_BETA  = 0.3
 GIFT_CREDIT_GIVER = 20
 DELETE_CREDIT = 5
 GIFT_RECV_CREDITS = (15, 10, 5)
@@ -77,7 +87,6 @@ class Player:
     total_wasted: float = 0.0
 
     recv_count_today: int = 0
-    visits_out_today: int = 0
     visits_in_this_week: int = 0
     pending_visited_credit: float = 0.0
     exchange_days_left: int = 0
@@ -128,14 +137,16 @@ class Simulator:
         shop_capacity: int = 600,
         n_days: int = 365,
         seed: Optional[int] = 42,
-        daily_visits: int = 2,
+        visit_alpha: float = VISIT_ALPHA,
+        visit_beta: float = VISIT_BETA,
         operator_bonus: float = DEFAULT_OPERATOR_BONUS,
     ):
         self.n = len(strategies)
         self.clue_probs = clue_probs.copy()
         self.shop_capacity = shop_capacity
         self.n_days = n_days
-        self.daily_visits = daily_visits
+        self.visit_alpha = visit_alpha
+        self.visit_beta = visit_beta
         # λ_operator = (24h / 20h) × (1 + operator_bonus + ambiance_bonus)
         self.lambda_operator = (24 / CLUE_BASE_HOURS) * (1 + operator_bonus + AMBIANCE_BONUS)
         self.rng = np.random.default_rng(seed)
@@ -206,7 +217,6 @@ class Simulator:
         for p in self.players:
             p.apply_daily_cap(self.shop_capacity)
             p.recv_count_today = 0
-            p.visits_out_today = 0
 
         # Log
         for p in self.players:
@@ -328,16 +338,16 @@ class Simulator:
             and q.exchange_active
             and q.visits_in_this_week < MAX_VISITS_IN_PER_WEEK
         ]
+        if not candidates:
+            return
+        n_avail = len(candidates)
+        # U-shaped Beta-Binomial: visit all or none on most days, rarely partial.
+        # visit_prob ~ Beta(α, β), n_visits ~ Binomial(n_avail, visit_prob)
+        visit_prob = float(self.rng.beta(self.visit_alpha, self.visit_beta))
+        n_visits = min(int(self.rng.binomial(n_avail, visit_prob)), MAX_VISITS_OUT_PER_DAY)
         self.rng.shuffle(candidates)
-        visited = set()
-        for target in candidates:
-            if p.visits_out_today >= self.daily_visits:
-                break
-            if target.pid in visited:
-                continue
+        for target in candidates[:n_visits]:
             p.earn(VISIT_CREDIT)
-            p.visits_out_today += 1
-            visited.add(target.pid)
             target.pending_visited_credit += VISITED_CREDIT
             target.visits_in_this_week += 1
 

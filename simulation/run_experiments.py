@@ -1,9 +1,10 @@
 """
-Experiment runner for Arknights Clue Gifting Study (v4).
+Experiment runner for Arknights Clue Gifting Study (v5).
 
-Changes from v3:
-  - recv_clues now expire after 10 days (game-accurate)
-  - E2 capped at N=50 for local compute (N=80/125 → supercomputer)
+Changes from v4:
+  - Visit model: U-shaped Beta-Binomial (α=β=0.3) replaces fixed daily_visits=2
+    Players either visit all available friends or none; rarely partial visits.
+    MAX_VISITS_OUT_PER_DAY=10 enforces game cap.
 
 Experiments:
   E1: Solo baseline — all strategies, uniform vs nonuniform
@@ -25,7 +26,8 @@ from collections import defaultdict
 from simulate import (
     Simulator, Strategy,
     UNIFORM_PROBS, NONUNIFORM_PROBS,
-    N_TYPES, DEFAULT_OPERATOR_BONUS, AMBIANCE_BONUS, CLUE_BASE_HOURS
+    N_TYPES, DEFAULT_OPERATOR_BONUS, AMBIANCE_BONUS, CLUE_BASE_HOURS,
+    VISIT_ALPHA, VISIT_BETA,
 )
 
 N_RUNS = 30       # Monte Carlo runs per config
@@ -34,7 +36,8 @@ WARMUP = 30       # days to discard (transient)
 
 
 def run_config(strategies, clue_probs, shop_capacity, n_runs=N_RUNS, n_days=N_DAYS,
-               operator_bonus=DEFAULT_OPERATOR_BONUS):
+               operator_bonus=DEFAULT_OPERATOR_BONUS,
+               visit_alpha=VISIT_ALPHA, visit_beta=VISIT_BETA):
     """Run multiple seeds and return averaged per-player results."""
     all_results = defaultdict(lambda: defaultdict(list))
 
@@ -46,6 +49,8 @@ def run_config(strategies, clue_probs, shop_capacity, n_runs=N_RUNS, n_days=N_DA
             n_days=n_days,
             seed=seed,
             operator_bonus=operator_bonus,
+            visit_alpha=visit_alpha,
+            visit_beta=visit_beta,
         )
         res = sim.run()
         for pid, data in res.items():

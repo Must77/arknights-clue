@@ -19,7 +19,8 @@
 | $r_V$ | 访问好友线索交流获得的信用点 | 30 |
 | $r_G$ | 赠送线索获得的信用点（赠出方）| 20 |
 | $\mathbf{r}_R$ | 接收线索获得的信用点序列 | (15, 10, 5) |
-| $V_{\max}^{\text{out}}$ | 每日最大访问次数 | 10 |
+| $V_{\max}^{\text{out}}$ | 每日最大访问次数（游戏上限）| 10 |
+| $\alpha_V, \beta_V$ | 主动访问次数的 Beta-Binomial 形状参数 | $\alpha_V = \beta_V = 0.3$（U 形）|
 | $V_{\max}^{\text{in}}$ | 每周最大被访问次数（上周结算）| 10 |
 | $D_E$ | 线索交流持续时间 | 1天（24小时）|
 | $W$ | 每日信用点钱包上限（每日结束时截断）| 300 |
@@ -89,15 +90,25 @@ $$e_i \leftarrow 1 \quad \text{（持续 } D_E = 1 \text{ 天）}$$
 
 ### 3.4 访问好友线索交流
 
-玩家 $i$ 每天可访问最多 $V_{\max}^{\text{out}} = 10$ 位好友的激活交流，每次：
+玩家 $i$ 每天的主动访问次数服从 **U 形 Beta-Binomial 分布**，反映玩家行为的两极化特征（要么全访问，要么不访问，鲜少部分访问）：
 
-$$w_i \mathrel{+}= r_V = 30$$
+$$p_i \sim \text{Beta}(\alpha_V, \beta_V), \quad n_i^{\text{visit}} = \min\!\left(\text{Binomial}(n_{\text{avail}},\ p_i),\ V_{\max}^{\text{out}}\right)$$
+
+其中 $n_{\text{avail}}$ 为当天正在进行线索交流且未超周上限的好友数量，$\alpha_V = \beta_V = 0.3$ 给出对称 U 形：
+
+| $p_i$ 落点 | 含义 | 概率 |
+|-----------|------|:---:|
+| $p_i \approx 0$ | 今天不访问任何人 | ≈ 44% |
+| $p_i \approx 1$ | 今天访问所有可访问好友 | ≈ 44% |
+| 中间值 | 部分访问 | ≈ 12% |
+
+**期望**：$\mathbb{E}[n_i^{\text{visit}}] = n_{\text{avail}} \cdot \dfrac{\alpha_V}{\alpha_V + \beta_V} = 0.5 \cdot n_{\text{avail}}$
+
+每次访问效果：$w_i \mathrel{+}= r_V = 30$
 
 被访问方 $j$（累积，下周初结算）：
 
 $$\text{pending\_credit}_j \mathrel{+}= r_V = 30 \quad \text{（每周最多累计 } V_{\max}^{\text{in}} \cdot r_V = 300 \text{）}$$
-
-**已确认**：每个好友在其单次线索交流期间最多只能被访问一次；好友未开启线索交流时，访问不产生任何信用点。
 
 ### 3.5 每日结算
 
