@@ -44,7 +44,7 @@ def expected_duplicates(k: int) -> float:
     return expected_draws_uniform(k) - k
 
 
-def cycle_length_days(clues_per_day: float = 1.2, k: int = 7) -> float:
+def cycle_length_days(clues_per_day: float = 3.0, k: int = 7) -> float:
     return expected_draws_uniform(k) / clues_per_day
 
 
@@ -52,7 +52,7 @@ def cycle_length_days(clues_per_day: float = 1.2, k: int = 7) -> float:
 # INDIVIDUAL STRATEGY ANALYSIS
 # ============================================================
 
-def credits_per_day_selfish(k: int = 7, clues_per_day: float = 1.2,
+def credits_per_day_selfish(k: int = 7, clues_per_day: float = 3.0,
                              exchange_credit: int = 210) -> float:
     """
     Strategy s=1 (never gift, solo).
@@ -72,7 +72,7 @@ def credits_per_day_selfish(k: int = 7, clues_per_day: float = 1.2,
     return exchange_credit / T
 
 
-def credits_per_day_optimal(k: int = 7, clues_per_day: float = 1.2,
+def credits_per_day_optimal(k: int = 7, clues_per_day: float = 3.0,
                              exchange_credit: int = 210,
                              gift_credit: int = 20) -> float:
     """
@@ -86,7 +86,7 @@ def credits_per_day_optimal(k: int = 7, clues_per_day: float = 1.2,
     return exchange_per_day + gifting_per_day
 
 
-def cost_of_gifting_unique(k: int = 7, clues_per_day: float = 1.2,
+def cost_of_gifting_unique(k: int = 7, clues_per_day: float = 3.0,
                             exchange_credit: int = 210,
                             probs: list = None) -> dict:
     """
@@ -120,7 +120,7 @@ def cost_of_gifting_unique(k: int = 7, clues_per_day: float = 1.2,
 
 
 def social_benefit_of_gifting_unique(receiver_missing: int,
-                                     k: int = 7, clues_per_day: float = 1.2,
+                                     k: int = 7, clues_per_day: float = 3.0,
                                      exchange_credit: int = 210) -> dict:
     """
     Social benefit when giver donates a unique clue to a receiver missing `m` types.
@@ -164,15 +164,21 @@ def print_analytical_summary():
     print("ANALYTICAL RESULTS — ARKNIGHTS CLUE GIFTING MODEL")
     print("=" * 60)
 
+    # Corrected nonuniform probs: p7 is 10pp higher than others
+    # Solve 6p + (p+0.10) = 1 => p = 9/70, p7 = 16/70
+    NONUNIFORM_PROBS = [9/70] * 6 + [16/70]
+    LAMBDA_TYPICAL = 3.0  # 1/day (4AM) + ~2.0/day (operator, 2xE2-5* + Lv3 + 15% ambiance)
+
     # 1. Coupon collector
     E_uniform = expected_draws_uniform(7)
-    E_nonuniform = expected_draws_nonuniform(NONUNIFORM_PROBS := [0.1]*6 + [0.4])
-    T_uniform = E_uniform / 1.2
-    T_nonuniform = E_nonuniform / 1.2
+    E_nonuniform = expected_draws_nonuniform(NONUNIFORM_PROBS)
+    T_uniform = E_uniform / LAMBDA_TYPICAL
+    T_nonuniform = E_nonuniform / LAMBDA_TYPICAL
 
     print("\n--- Coupon Collector ---")
-    print(f"Uniform (1/7 each):    E[draws] = {E_uniform:.4f}, E[cycle] = {T_uniform:.2f} days")
-    print(f"Nonuniform (p7=0.4):   E[draws] = {E_nonuniform:.4f}, E[cycle] = {T_nonuniform:.2f} days")
+    print(f"  λ_typical = {LAMBDA_TYPICAL:.1f}/day (4AM fixed + operator, typical config)")
+    print(f"Uniform (1/7 each):               E[draws] = {E_uniform:.4f}, E[cycle] = {T_uniform:.2f} days")
+    print(f"Nonuniform (p7=16/70≈22.9%): E[draws] = {E_nonuniform:.4f}, E[cycle] = {T_nonuniform:.2f} days")
     print(f"Uniform duplicates/cycle: {E_uniform - 7:.4f}")
     print(f"Nonuniform duplicates/cycle: {E_nonuniform - 7:.4f}")
 
@@ -220,5 +226,4 @@ def print_analytical_summary():
 
 
 if __name__ == '__main__':
-    NONUNIFORM_PROBS = [0.1] * 6 + [0.4]
     print_analytical_summary()

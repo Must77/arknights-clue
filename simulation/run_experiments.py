@@ -1,12 +1,14 @@
 """
-Experiment runner for Arknights Clue Gifting Study.
+Experiment runner for Arknights Clue Gifting Study (v3).
 
 Experiments:
-  E1: Solo baseline — all 4 strategies, uniform vs nonuniform
-  E2: Group size effect — N=2,5,10,50, all using S*, uniform
-  E3: Homogeneous strategy comparison — all N players use same strategy
+  E1: Solo baseline — all strategies, uniform vs nonuniform
+  E2: Group size effect — N in {1,2,5,10,20,50,80,125}, all using S*, uniform
+  E3: Homogeneous strategy comparison — all N players use same strategy (N=10)
   E4: Mixed strategies — what happens when one defects from S*?
-  E5: Shop capacity sensitivity — S=300,600,∞
+  E5: Shop capacity sensitivity — S=300,400,600,800,∞
+  E6: Distribution effect — uniform vs corrected nonuniform (p7=16/70)
+  E7: Lambda sensitivity — compare λ ≈ 2.2 (no bonus) vs 3.0 (typical) vs 3.3 (high)
 """
 
 import sys
@@ -19,7 +21,7 @@ from collections import defaultdict
 from simulate import (
     Simulator, Strategy,
     UNIFORM_PROBS, NONUNIFORM_PROBS,
-    N_TYPES
+    N_TYPES, DEFAULT_OPERATOR_BONUS, AMBIANCE_BONUS, CLUE_BASE_HOURS
 )
 
 N_RUNS = 30       # Monte Carlo runs per config
@@ -27,7 +29,8 @@ N_DAYS = 365      # simulation length
 WARMUP = 30       # days to discard (transient)
 
 
-def run_config(strategies, clue_probs, shop_capacity, n_runs=N_RUNS, n_days=N_DAYS):
+def run_config(strategies, clue_probs, shop_capacity, n_runs=N_RUNS, n_days=N_DAYS,
+               operator_bonus=DEFAULT_OPERATOR_BONUS):
     """Run multiple seeds and return averaged per-player results."""
     all_results = defaultdict(lambda: defaultdict(list))
 
@@ -38,14 +41,16 @@ def run_config(strategies, clue_probs, shop_capacity, n_runs=N_RUNS, n_days=N_DA
             shop_capacity=shop_capacity,
             n_days=n_days,
             seed=seed,
+            operator_bonus=operator_bonus,
         )
         res = sim.run()
         for pid, data in res.items():
             if pid == '_group':
                 continue
             for k, v in data.items():
-                if isinstance(v, (int, float)):
-                    all_results[pid][k].append(v)
+                if isinstance(v, str):
+                    continue  # skip non-numeric fields (e.g., 'strategy')
+                all_results[pid][k].append(float(v))
 
     # Average over runs
     averaged = {}
@@ -74,10 +79,10 @@ def print_results(label, results, show_pids=False):
         exc = data.get('exchange_rate_per_day', 0)
         gg = data.get('gifts_given', 0)
         gr = data.get('gifts_received', 0)
-        blocked = data.get('clues_blocked', 0)
+        queued = data.get('queue_remaining', 0)
         pid_str = f"P{pid}" if show_pids else strat
         print(f"  [{pid_str:20s}] {cpd:7.2f} cr/day | "
-              f"exch/day={exc:.4f} | gifts_out={gg:.1f} | gifts_in={gr:.1f} | blocked={blocked:.1f}")
+              f"exch/day={exc:.4f} | gifts_out={gg:.1f} | gifts_in={gr:.1f} | queue={queued:.1f}")
 
     group_cpd = results.get('_group_credits_per_day', 0)
     print(f"  {'GROUP TOTAL':21s} {group_cpd:7.2f} cr/day")
@@ -93,9 +98,10 @@ def experiment_e1():
     print("    — comparing all strategies in isolation")
     print("=" * 60)
 
-    for dist_name, probs in [("Uniform", UNIFORM_PROBS), ("Nonuniform (p7=0.4)", NONUNIFORM_PROBS)]:
+    for dist_name, probs in [("Uniform", UNIFORM_PROBS),
+                              ("Nonuniform (p7=16/70)", NONUNIFORM_PROBS)]:
         print(f"\n  Distribution: {dist_name}")
-        print(f"  {'Strategy':20s} {'cr/day':>8} {'exch/day':>10} {'gifts_out':>10} {'blocked':>8}")
+        print(f"  {'Strategy':20s} {'cr/day':>8} {'exch/day':>10} {'gifts_out':>10} {'queue':>8}")
         print(f"  {'-'*20} {'-'*8} {'-'*10} {'-'*10} {'-'*8}")
         for strat in Strategy:
             res = run_config([strat], probs, shop_capacity=9999, n_days=N_DAYS)
@@ -103,7 +109,7 @@ def experiment_e1():
             print(f"  {d['strategy']:20s} {d['credits_per_day']:>8.2f} "
                   f"{d['exchange_rate_per_day']:>10.4f} "
                   f"{d['gifts_given']:>10.1f} "
-                  f"{d['clues_blocked']:>8.1f}")
+                  f"{d['queue_remaining']:>8.1f}")
 
 
 # ============================================================
@@ -117,14 +123,17 @@ def experiment_e2():
     print(f"  {'N':>4} {'cr/day (per player)':>22} {'group cr/day':>15} {'exch/day':>10} {'gifts_in':>10}")
     print(f"  {'-'*4} {'-'*22} {'-'*15} {'-'*10} {'-'*10}")
 
-    for N in [1, 2, 5, 10, 20, 50]:
+    for N in [1, 2, 5, 10, 20, 50, 80, 125]:
+        # Use fewer runs for large N to keep runtime reasonable
+        runs = max(5, N_RUNS // (1 + N // 30))
         strats = [Strategy.OPTIMAL] * N
-        res = run_config(strats, UNIFORM_PROBS, shop_capacity=9999, n_days=N_DAYS)
+        res = run_config(strats, UNIFORM_PROBS, shop_capacity=9999,
+                         n_days=N_DAYS, n_runs=runs)
         per_player = res[0]['credits_per_day']
         group_total = res['_group_credits_per_day']
         exc = res[0]['exchange_rate_per_day']
         gr = res[0]['gifts_received']
-        print(f"  {N:>4} {per_player:>22.2f} {group_total:>15.2f} {exc:>10.4f} {gr:>10.1f}")
+        print(f"  {N:>4} {per_player:>22.2f} {group_total:>15.2f} {exc:>10.4f} {gr:>10.1f} (runs={runs})")
 
 
 # ============================================================
@@ -218,12 +227,42 @@ def experiment_e6():
     N = 10
     strats = [Strategy.OPTIMAL] * N
     for dist_name, probs in [("Uniform (1/7 each)", UNIFORM_PROBS),
-                              ("Nonuniform (p7=0.4)", NONUNIFORM_PROBS)]:
+                              ("Nonuniform (p7=16/70)", NONUNIFORM_PROBS)]:
         res = run_config(strats, probs, shop_capacity=9999, n_days=N_DAYS)
         cpd = res[0]['credits_per_day']
         exc = res[0]['exchange_rate_per_day']
         cycle = round(1 / exc, 2) if exc > 0 else float('inf')
         print(f"  {dist_name:25s} {cpd:>15.2f} {exc:>10.4f} {cycle:>16.2f}")
+
+
+# ============================================================
+# E7: Lambda sensitivity (N=10, all S*, uniform)
+# ============================================================
+
+def experiment_e7():
+    print("\n" + "=" * 60)
+    print("E7: LAMBDA SENSITIVITY (N=10, all S*, uniform)")
+    print("    operator_bonus varies; ambiance=15% fixed; lambda = 1 + 24/20*(1+bonus+0.15)")
+    print("=" * 60)
+    print(f"  {'Config':30s} {'op_bonus':>9} {'λ_total':>8} {'cr/day/player':>15} {'exch/day':>10}")
+    print(f"  {'-'*30} {'-'*9} {'-'*8} {'-'*15} {'-'*10}")
+
+    N = 10
+    strats = [Strategy.OPTIMAL] * N
+    configs = [
+        ("No bonus (2×E0-4★+Lv3)",  0.04 + 0.11),   # 4% + 11% = 15%
+        ("Low (2×E1-4★+Lv3)",       0.16 + 0.11),   # 16%+11%=27% (2×(8+2)%+11%)
+        ("Typical (2×E2-5★+Lv3)",   0.51),            # DEFAULT_OPERATOR_BONUS
+        ("High (2×E2-6★+Lv3)",      0.43 + 0.11),   # 2×(16+5)%+11%=53%
+    ]
+    for label, op_bonus in configs:
+        lambda_op = (24 / CLUE_BASE_HOURS) * (1 + op_bonus + AMBIANCE_BONUS)
+        lambda_total = 1.0 + lambda_op
+        res = run_config(strats, UNIFORM_PROBS, shop_capacity=9999,
+                         n_days=N_DAYS, operator_bonus=op_bonus)
+        cpd = res[0]['credits_per_day']
+        exc = res[0]['exchange_rate_per_day']
+        print(f"  {label:30s} {op_bonus:>9.2f} {lambda_total:>8.2f} {cpd:>15.2f} {exc:>10.4f}")
 
 
 # ============================================================
@@ -240,5 +279,6 @@ if __name__ == '__main__':
     experiment_e4()
     experiment_e5()
     experiment_e6()
+    experiment_e7()
 
     print("\n\nAll experiments complete.")
