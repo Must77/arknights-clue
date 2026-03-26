@@ -60,8 +60,10 @@ DEFAULT_OPERATOR_BONUS = 0.51
 # ============================================================
 
 class Strategy(Enum):
-    ALTRUISTIC       = "Altruistic"        # gift every self-generated clue (random target)
+    ALTRUISTIC       = "Altruistic"        # gift every clue except the one completing the 7-type set
+    ALTRUISTIC_SAFE  = "Altruistic_Safe"   # same but also keeps clues when exactly 2 types missing
     SELFISH          = "Selfish"           # never gift; delete duplicates near cap (+5 each)
+    SELFISH_TYPE7    = "Selfish_Type7"     # gift only type-7 duplicates; delete types 1-6 like Selfish
     OPTIMAL          = "Optimal_S*"        # gift all duplicates (random target)
     OPTIMAL_TARGETED = "Optimal_Targeted"  # gift all duplicates (to friend who needs the type)
     THRESHOLD_8      = "Threshold_8"       # gift duplicates only when self_total >= 8
@@ -198,9 +200,9 @@ class Simulator:
         for p in self.players:
             self._drain_queue(p)
 
-        # Selfish: delete duplicates once per day, then drain again
+        # Selfish / Selfish_Type7: delete duplicates once per day, then drain again
         for p in self.players:
-            if p.strategy == Strategy.SELFISH:
+            if p.strategy in (Strategy.SELFISH, Strategy.SELFISH_TYPE7):
                 self._delete_duplicates(p)
                 self._drain_queue(p)
 
@@ -258,10 +260,30 @@ class Simulator:
     def _on_new_clue(self, p: Player, clue_type: int):
         """Execute strategy action for a newly acquired clue."""
         if p.strategy == Strategy.ALTRUISTIC:
-            self._gift_random(p, clue_type)
+            # Gift everything EXCEPT the single clue that completes the 7-type set.
+            # Keep only if: only copy of this type AND it gives a complete set.
+            completing = (p.all_clues[clue_type] == 1 and p.has_complete_set)
+            if not completing:
+                self._gift_random(p, clue_type)
+
+        elif p.strategy == Strategy.ALTRUISTIC_SAFE:
+            # Gift everything EXCEPT clues belonging to the last 1-2 missing types.
+            # n_missing is computed after adding this clue to self_clues.
+            # Keep if: only copy of this type (was missing) AND ≤1 type still missing
+            # (meaning this clue was one of the 2 needed to complete the set).
+            n_missing = int(np.sum(p.all_clues == 0))
+            keep = (p.all_clues[clue_type] == 1) and (n_missing <= 1)
+            if not keep:
+                self._gift_random(p, clue_type)
 
         elif p.strategy == Strategy.SELFISH:
             pass  # deletion handled separately
+
+        elif p.strategy == Strategy.SELFISH_TYPE7:
+            # Gift type-7 duplicates only (index 6); types 0-5 kept and deleted like Selfish.
+            if clue_type == N_TYPES - 1 and p.all_clues[clue_type] >= 2:
+                self._gift_random(p, clue_type)
+            # types 0-5: deletion handled separately (same threshold as Selfish)
 
         elif p.strategy == Strategy.OPTIMAL:
             if p.all_clues[clue_type] >= 2:
