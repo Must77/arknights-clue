@@ -67,6 +67,7 @@ class Strategy(Enum):
     OPTIMAL          = "Optimal_S*"        # gift all duplicates (random target)
     OPTIMAL_TARGETED = "Optimal_Targeted"  # gift all duplicates (to friend who needs the type)
     THRESHOLD_8      = "Threshold_8"       # gift duplicates only when self_total >= 8
+    THRESHOLD_10     = "Threshold_10"      # gift duplicates only when self_total >= 10 (cap); fallback to any dup
 
 
 # ============================================================
@@ -296,6 +297,17 @@ class Simulator:
         elif p.strategy == Strategy.THRESHOLD_8:
             if p.all_clues[clue_type] >= 2 and p.self_total >= 8:
                 self._gift_random(p, clue_type)
+
+        elif p.strategy == Strategy.THRESHOLD_10:
+            if p.self_total >= MAX_SELF_CLUES:
+                if p.all_clues[clue_type] >= 2:
+                    self._gift_random(p, clue_type)
+                else:
+                    # Newly added clue is unique — find any other duplicate to gift
+                    for t in range(N_TYPES):
+                        if t != clue_type and p.self_clues[t] >= 2:
+                            self._gift_random(p, t)
+                            break
 
     def _delete_duplicates(self, p: Player):
         """Selfish: delete self-clue duplicates to free cap space (+5 each)."""

@@ -1,0 +1,108 @@
+Running Arknights Clue Gifting Experiments
+N_RUNS=30, N_DAYS=365
+
+============================================================
+E1: SOLO BASELINE (N=1, no friends)
+    — comparing all strategies in isolation
+============================================================
+
+  Distribution: Uniform
+  Strategy               cr/day   exch/day  gifts_out    queue
+  -------------------- -------- ---------- ---------- --------
+  Altruistic               0.02     0.0000        0.0   1083.5
+  Altruistic_Safe          0.02     0.0000        0.0   1083.5
+  Selfish                 42.01     0.1550        0.0      0.0
+  Selfish_Type7           42.01     0.1550        0.0      0.0
+  Optimal_S*               0.02     0.0000        0.0   1083.5
+  Optimal_Targeted         0.02     0.0000        0.0   1083.5
+  Threshold_8              0.02     0.0000        0.0   1083.5
+  Threshold_10             0.02     0.0000        0.0   1083.5
+
+  Distribution: Nonuniform (p7=16/70)
+  Strategy               cr/day   exch/day  gifts_out    queue
+  -------------------- -------- ---------- ---------- --------
+  Altruistic               0.02     0.0000        0.0   1083.5
+  Altruistic_Safe          0.02     0.0000        0.0   1083.5
+  Selfish                 40.86     0.1480        0.0      0.0
+  Selfish_Type7           40.86     0.1480        0.0      0.0
+  Optimal_S*               0.02     0.0000        0.0   1083.5
+  Optimal_Targeted         0.02     0.0000        0.0   1083.5
+  Threshold_8              0.02     0.0000        0.0   1083.5
+  Threshold_10             0.02     0.0000        0.0   1083.5
+
+============================================================
+E2: GROUP SIZE EFFECT (all players use S*, uniform, shop=∞)
+============================================================
+     N    cr/day (per player)    group cr/day   exch/day   gifts_in    expired
+  ---- ---------------------- --------------- ---------- ---------- ----------
+     1                   0.02            0.02     0.0000        0.0        0.0
+     2                 156.23          310.05     0.3480      914.6      204.7
+     5                 197.23          967.03     0.3870      908.1      123.6
+    10                 233.97         2273.32     0.3910      892.6      104.0
+    20                 254.02         4716.59     0.3930      886.8       96.0
+    50                 279.85        11884.15     0.3990      894.9       89.3
+
+============================================================
+E3: HOMOGENEOUS STRATEGIES (N=10, uniform, shop=∞)
+============================================================
+  Strategy               cr/day/player    group cr/day   exch/day  expired/yr
+  -------------------- --------------- --------------- ---------- -----------
+  Altruistic                    225.76         2257.61     0.3488       181.9
+  Altruistic_Safe               228.10         2281.03     0.3678       132.5
+  Selfish                        83.13          831.33     0.1554         0.0
+  Selfish_Type7                  99.62          996.24     0.1645        90.9
+  Optimal_S*                    227.33         2273.32     0.3786       110.8
+  Optimal_Targeted              229.55         2295.47     0.3968        65.0
+  Threshold_8                   182.15         1821.55     0.3305       229.5
+  Threshold_10                  178.42         1784.17     0.3299       230.1
+
+============================================================
+E4: MIXED STRATEGIES — 1 deviant in a group of 10 using S* (uniform, shop=∞)
+    Shows incentive to deviate from S*
+============================================================
+
+  Baseline (all S*): player=233.97 cr/day, group=2273.32 cr/day
+
+  Deviant strategy       deviant cr/day   others cr/day   group cr/day  deviant gain
+  -------------------- ---------------- --------------- -------------- -------------
+  Altruistic                     214.19          233.43        2265.32        -19.78
+  Altruistic_Safe                225.53          232.16        2271.16         -8.44
+  Selfish                        210.85          220.75        2144.96        -23.11
+  Selfish_Type7                  212.56          220.82        2151.52        -21.41
+  Optimal_S*                     233.97          232.30        2273.32         +0.00
+  Optimal_Targeted               233.43          233.86        2292.10         -0.54
+  Threshold_8                    224.86          226.72        2199.12         -9.10
+  Threshold_10                   228.62          224.75        2191.70         -5.35
+
+============================================================
+E5: SHOP CAPACITY SENSITIVITY (N=10, all S*, uniform)
+============================================================
+    Shop capacity   cr/day/player   wasted/day    group cr/day
+  --------------- --------------- ------------ ---------------
+              300          230.13         3.35         2238.76
+              400          233.43         0.28         2268.38
+              600          233.93         0.00         2272.93
+              800          233.97         0.00         2273.32
+                ∞          233.97         0.00         2273.32
+
+============================================================
+E6: DISTRIBUTION EFFECT (N=10, all S*, shop=∞)
+============================================================
+  Distribution                cr/day/player   exch/day  exch_cycle_days
+  ------------------------- --------------- ---------- ----------------
+  Uniform (1/7 each)                 233.97     0.3910             2.56
+  Nonuniform (p7=16/70)              223.12     0.3550             2.82
+
+============================================================
+E7: LAMBDA SENSITIVITY (N=10, all S*, uniform)
+    operator_bonus varies; ambiance=15% fixed; lambda = 1 + 24/20*(1+bonus+0.15)
+============================================================
+  Config                          op_bonus  λ_total   cr/day/player   exch/day
+  ------------------------------ --------- -------- --------------- ----------
+  No bonus (2×E0-4★+Lv3)              0.15     2.56          201.35     0.3210
+  Low (2×E1-4★+Lv3)                   0.27     2.70          211.40     0.3430
+  Typical (2×E2-5★+Lv3)               0.51     2.99          233.97     0.3910
+  High (2×E2-6★+Lv3)                  0.54     3.03          235.56     0.3930
+
+
+All experiments complete.
