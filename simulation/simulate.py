@@ -1,7 +1,7 @@
 """
-Arknights Clue Gifting Strategy Simulation (v5)
+Arknights Clue Gifting Strategy Simulation (v5.1)
 
-Changes from v4:
+Changes from v4 → v5:
 - Outgoing visits now use U-shaped Beta-Binomial distribution instead of
   fixed daily_visits=2, reflecting real player behavior:
     * most days either visit ALL available friends or NONE (rarely partial)
@@ -10,6 +10,10 @@ Changes from v4:
   Added constants: MAX_VISITS_OUT_PER_DAY=10, VISIT_ALPHA=0.3, VISIT_BETA=0.3
 - Simulator parameter daily_visits removed; replaced by visit_alpha, visit_beta
 - Player field visits_out_today removed (no longer needed as running counter)
+
+v5 → v5.1:
+- Added Threshold_10 strategy: gift duplicates only when at inventory cap (self_total >= 10);
+  if newly added clue isn't a duplicate, finds any other duplicate to gift instead
 """
 
 import numpy as np

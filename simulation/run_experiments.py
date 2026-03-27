@@ -1,7 +1,7 @@
 """
-Experiment runner for Arknights Clue Gifting Study (v5).
+Experiment runner for Arknights Clue Gifting Study (v5.1).
 
-Changes from v4:
+Changes from v4 → v5:
   - Visit model: U-shaped Beta-Binomial (α=β=0.3) replaces fixed daily_visits=2
     Players either visit all available friends or none; rarely partial visits.
     MAX_VISITS_OUT_PER_DAY=10 enforces game cap.

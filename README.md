@@ -69,7 +69,7 @@ arknights-clue-study/
 ├── RESEARCH_PLAN.md        研究计划与假设汇总
 ├── model.md                形式化数学模型
 ├── simulation/
-│   ├── simulate.py         核心仿真引擎（v4）
+│   ├── simulate.py         核心仿真引擎（v5.1）
 │   └── run_experiments.py  实验脚本（E1~E7）
 ├── analysis/
 │   └── analytical.py       解析计算（优惠收集问题等）
@@ -85,7 +85,7 @@ arknights-clue-study/
 # 需要 Python 3.9+ 和 numpy
 pip install numpy
 
-# 运行全部实验（约3-5分钟）
+# 运行全部实验（约15-25分钟，8策略×7实验）
 cd simulation
 python3 -u run_experiments.py
 ```
@@ -110,7 +110,7 @@ python3 -u run_experiments.py
 |------|:---:|:---:|
 | 无加成（2×E0-4★+Lv3）| 2.56 | ~201 |
 | 低（2×E1-4★+Lv3）| 2.70 | ~211 |
-| **典型（2×E2-5★+Lv3）** | **3.0** | **~227** |
+| **典型（2×E2-5★+Lv3）** | **3.0** | **~234** |
 | 高（2×E2-6★+Lv3）| 3.03 | ~236 |
 
 ---
