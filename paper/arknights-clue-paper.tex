@@ -1,0 +1,254 @@
+\documentclass{rubbish}
+
+\rubbishtitle{明日方舟线索赠送策略的博弈分析与蒙特卡洛研究}
+\rubbishmid{MID: draft-2026-0413}
+\rubbishreceived{Received 13th April 2026,}
+\rubbishaccepted{Accepted 13th April 2026}
+\rubbishtype{Research Article}
+
+\rubbishauthors{
+  匿名作者\textsuperscript{1,*}
+}
+
+\rubbishaffiliations{
+  \textsuperscript{1}独立研究者\\[1pt]
+  \textsuperscript{*}\,\georgiafont
+  \href{mailto:author@example.com}{\underline{author@example.com}}
+}
+
+\rubbishkeywords{明日方舟；博弈论；蒙特卡洛模拟；线索赠送；合作策略}
+
+\begin{document}
+
+\makerubbishtitle
+
+\begin{rubbishabstract}
+《明日方舟》基建中的线索系统构成了一个小规模重复协调问题。玩家可以将自己产出的线索赠送给好友以换取即时信用点，但若赠出的是唯一线索，则可能延缓自身后续线索交流周期。本文研究在这一机制下，何种赠送策略能够最大化个人与群体的长期信用收益。研究方法上，本文结合 coupon collector 问题的解析近似与蒙特卡洛模拟，建立包含线索生成、库存上限、赠送奖励、访问奖励、收到线索十天过期与每日钱包截断的完整模型。本文比较了八类候选策略，包括完全利己、完全利他、只送重复、定向送重复以及阈值型策略。结果表明，在本文考察的策略集合中，“只赠送重复线索”是稳定的个人策略：在十人群体中，任一玩家从该基准策略单方面偏离，都会降低其自身收益。但群体协调意义下表现最优的是“定向赠送重复线索”，其人均收益为 229.55 信用点/天，高于非定向的 227.33，也远高于完全利己的 83.13。进一步的敏感性分析表明，信用商店日容量 400 已基本足够，非均匀线索分布会带来约 4.6\% 的收益损失，而总线索生成速率超过约 3 条/天后边际收益明显下降。本文的实际结论很直接：不要赠送唯一线索；重复线索应当尽快赠出；若能观察好友缺失类型，则应优先定向赠送。
+\end{rubbishabstract}
+
+\begin{rubbishbody}
+
+\section{引言}
+
+《明日方舟》的线索会客室系统将私人库存决策与社交奖励机制绑定在一起。玩家既可以保留自己产出的线索，以尽快凑齐触发线索交流所需的七种类型；也可以把线索赠送给好友，立即换取信用点奖励。由此产生的核心张力在于：赠送行为能否带来足够的即时收益，以补偿其对自身未来线索交流进度的延迟。
+
+从理论结构上看，该问题同时与两个经典方向相关。其一，玩家收集全部七类线索的过程是 coupon collector 问题的一个变体 [2,3]；其二，一旦多个玩家通过赠送机制发生互动，系统就变成了重复非合作博弈 [4]。因此，真正需要回答的问题不仅是“要不要送线索”，而是“什么样的送线索规则在个体上理性、在群体上高效”。
+
+本文基于配套仓库中的形式化模型、解析脚本与模拟器，对这一问题进行系统研究 [1]。本文主要贡献有三点：第一，将游戏机制形式化为带有状态变量、奖励与约束的日步长随机过程；第二，构造并比较有限策略空间中的八类代表性赠送规则；第三，从个体最优、群体最优与均衡稳定性三个层面解释模拟结果。
+
+\section{模型与方法}
+
+\subsection{系统环境}
+
+每个玩家维护两类库存：一类是“自持线索”，可以被赠送；另一类是“收到的线索”，可用于线索交流，但不能再次赠出。系统共有 $K=7$ 类线索。自持线索上限为 $C_{\max}=10$，收到的线索不占自持上限，但会在收到十天后过期。
+
+每日线索生成包含两个来源：其一是每日 4AM 固定生成 1 条线索；其二是由干员搜集形成的随机生成过程，后者建模为 Poisson 过程，其强度为
+\begin{equation}
+\lambda_{\mathrm{op}} = \frac{24}{20}\left(1+b_{\mathrm{op}}+b_{\mathrm{amb}}\right),
+\end{equation}
+其中 $b_{\mathrm{op}}$ 为干员与会客室加成，$b_{\mathrm{amb}}=0.15$ 为宿舍氛围固定加成。本文基准实验采用典型配置 $b_{\mathrm{op}}=0.51$，对应总线索生成速率约为 $\lambda \approx 3.0$ 条/天。
+
+当玩家持有七种线索各至少一条时，即可触发线索交流。一次交流会消耗每种线索各一条，并在 1 天后向发起者发放 210 信用点。赠送一条线索时，赠送者立即获得 20 信用点；接收者获得该线索，并分别就当日收到的第 1、2、3 条线索获得 15、10、5 信用点。主动访问他人线索交流可获得 30 信用点，被访问收益按周结算且每周最多计入 10 次。
+
+\subsection{访问模型与效用定义}
+
+本文不采用固定访问次数设定，而将主动访问行为建模为 U 形 Beta-Binomial 过程。若某玩家当天有 $n_{\mathrm{avail}}$ 个可访问好友，则其访问数由
+\begin{equation}
+p_i \sim \mathrm{Beta}(\alpha_V,\beta_V), \qquad
+n_i^{\mathrm{visit}} = \min\!\left(\mathrm{Binomial}(n_{\mathrm{avail}}, p_i), 10\right)
+\end{equation}
+给出，其中 $\alpha_V = \beta_V = 0.3$。这一设定意味着玩家大多处于“两极化”状态：要么几乎不访问任何好友，要么尽可能访问所有可访问对象，只有少数情况下表现为部分访问。
+
+本文的核心绩效指标为长期可消费信用收益。在代码实现中，该指标由累计实际消费掉的信用点定义，即考虑商店日容量与每日钱包截断后的 \texttt{total\_spent}。对玩家 $i$ 与时长 $T$，记
+\begin{equation}
+U_i(T) = \mathrm{total\_spent}_i(T),
+\end{equation}
+则文中报告的结果统一写为 $U_i(T)/T$，单位为“信用点/天”。
+
+\subsection{策略空间}
+
+本文比较如下八类策略。
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Altruistic}：除“恰好凑齐七种类型的最后一条唯一线索”外，其余新获得线索一律赠出。
+  \item \textbf{Altruistic\_Safe}：与 \textbf{Altruistic} 类似，但当玩家在新增线索后至多仍缺一类时，会更保守地保留关键线索。
+  \item \textbf{Selfish}：从不赠送；当库存接近上限时删除重复线索，每条获得 5 信用点。
+  \item \textbf{Selfish\_Type7}：仅赠送 7 号线索的重复件，其余部分与 \textbf{Selfish} 相同。
+  \item \textbf{Optimal\_S*}：所有重复线索都赠送，所有唯一线索都保留。
+  \item \textbf{Optimal\_Targeted}：与 \textbf{Optimal\_S*} 相同，但会优先把重复线索赠送给正缺该类型的好友。
+  \item \textbf{Threshold\_8}：只有当自持总线索数达到 8 且出现重复时才赠出。
+  \item \textbf{Threshold\_10}：只有当自持总线索达到上限时才赠出；若新入库线索不是重复，则改送库存中的其他重复件。
+\end{itemize}
+
+其中，“只送重复线索”之所以是一个天然候选策略，是因为重复件不会进一步加快自身完成七种线索集合的速度，但赠出后可以立即带来正向收益。
+
+\subsection{实验设计}
+
+模拟器实现见仓库代码 [1]。除特别说明外，所有配置均运行 30 次独立 Monte Carlo 重复，每次模拟 365 天。基准环境采用均匀线索分布、十人完全连通好友网络、典型干员加成，并默认商店容量足够大，除非该参数本身就是敏感性分析对象。
+
+\section{结果}
+
+\subsection{单人基准}
+
+单人情形首先说明了社交互动的必要性。当 $N=1$ 时，所有依赖赠送的策略几乎都退化为零有效收益，因为不存在可接受礼物的好友，而玩家在自持库存受阻后只会不断堆积待入库队列。此时只有依赖“删除重复件换取信用”的策略仍然有效，\textbf{Selfish} 与 \textbf{Selfish\_Type7} 均达到 42.01 信用点/天。这一结果说明，赠送行为的价值并不来自线索本身的静态变现，而来自多人协作网络中的动态流转。
+
+\subsection{同质群体比较}
+
+表~\ref{tab:homogeneous} 给出了十人同质群体下的核心比较结果。
+
+\noindent
+\begin{minipage}{\columnwidth}
+\captionof{table}{十人同质群体、均匀线索分布下的策略比较。}
+\label{tab:homogeneous}
+\vspace{2pt}
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+  \toprule
+  \textbf{策略} & \textbf{信用点/天} & \textbf{交流/天} & \textbf{过期/年} \\
+  \midrule
+  Optimal\_Targeted & 229.55 & 0.3968 & 65.0 \\
+  Altruistic\_Safe  & 228.10 & 0.3678 & 132.5 \\
+  Optimal\_S*       & 227.33 & 0.3786 & 110.8 \\
+  Altruistic        & 225.76 & 0.3488 & 181.9 \\
+  Threshold\_8      & 182.15 & 0.3305 & 229.5 \\
+  Threshold\_10     & 178.42 & 0.3299 & 230.1 \\
+  Selfish\_Type7    & 99.62  & 0.1645 & 90.9 \\
+  Selfish           & 83.13  & 0.1554 & 0.0 \\
+  \bottomrule
+\end{tabular}
+\end{minipage}
+
+从表中可以看到三个清晰结论。第一，只送重复显著优于阈值型赠送；等待库存涨到 8 或 10 再赠送，会同时压制赠送收益并延迟库存疏通。第二，完全利他并非最优，因为它会把部分高价值的唯一线索过早送出，从而增加自身交流延迟与收到线索的过期。第三，定向赠送重复线索是本文策略集合中表现最好的协调规则。相较于非定向的 \textbf{Optimal\_S*}，其人均收益提高了 2.22 信用点/天，同时把过期线索从每年 110.8 条降到 65.0 条。
+
+\subsection{偏离激励与均衡性质}
+
+博弈论上更关键的问题是：若一个玩家处于“其余人都只送重复”的环境中，他是否有动机单方面偏离？表~\ref{tab:deviation} 表明，在本文考察的策略集中，答案是否定的。
+
+\noindent
+\begin{minipage}{\columnwidth}
+\captionof{table}{十人群体中，单个玩家偏离 \textbf{Optimal\_S*} 基准的结果。基准情形下，焦点玩家收益为 233.97 信用点/天，群体总收益为 2273.32 信用点/天。}
+\label{tab:deviation}
+\vspace{2pt}
+\centering
+\small
+\begin{tabular}{@{}lcccc@{}}
+  \toprule
+  \textbf{偏离策略} & \textbf{偏离者} & \textbf{其他人} & \textbf{群体总收益} & \textbf{偏离增益} \\
+  \midrule
+  Altruistic        & 214.19 & 233.43 & 2265.32 & -19.78 \\
+  Altruistic\_Safe  & 225.53 & 232.16 & 2271.16 & -8.44 \\
+  Selfish           & 210.85 & 220.75 & 2144.96 & -23.11 \\
+  Selfish\_Type7    & 212.56 & 220.82 & 2151.52 & -21.41 \\
+  Optimal\_Targeted & 233.43 & 233.86 & 2292.10 & -0.54 \\
+  Threshold\_8      & 224.86 & 226.72 & 2199.12 & -9.10 \\
+  Threshold\_10     & 228.62 & 224.75 & 2191.70 & -5.35 \\
+  \bottomrule
+\end{tabular}
+\end{minipage}
+
+因此，在本文有限纯策略空间内，\textbf{Optimal\_S*} 可视为一个稳定的 Nash 型策略：玩家单方面偏离并不能提升自身收益 [4]。其中最值得注意的近例外是 \textbf{Optimal\_Targeted}。若只有一个玩家改为“定向送重复”，其自身收益会比基准略低 0.54 信用点/天，但群体总收益却从 2273.32 上升到 2292.10。这说明个体稳定与群体最优之间并不完全重合，存在轻微的协调收益缺口。
+
+\subsection{敏感性分析}
+
+主要比较静态结果见表~\ref{tab:group-size} 与表~\ref{tab:sensitivity}。
+
+\noindent
+\begin{minipage}{\columnwidth}
+\captionof{table}{\textbf{Optimal\_S*} 同质群体下的规模效应。}
+\label{tab:group-size}
+\vspace{2pt}
+\centering
+\small
+\begin{tabular}{@{}rccc@{}}
+  \toprule
+  \textbf{$N$} & \textbf{信用点/天} & \textbf{赠送/年} & \textbf{过期/年} \\
+  \midrule
+   1 & 0.02   & 0.0   & 0.0 \\
+   2 & 156.23 & 914.6 & 204.7 \\
+   5 & 197.23 & 908.1 & 123.6 \\
+  10 & 233.97 & 892.6 & 104.0 \\
+  20 & 254.02 & 886.8 & 96.0 \\
+  50 & 279.85 & 894.9 & 89.3 \\
+  \bottomrule
+\end{tabular}
+\end{minipage}
+
+随着群体规模扩大，人均收益显著上升，因为重复线索更容易被路由到真正需要的接收者手中，而过期规模在越过小样本瓶颈后逐步下降。最差拥塞发生在 $N=2$ 时，因为双方更容易在缺失类型上形成长期错配。
+
+\noindent
+\begin{minipage}{\columnwidth}
+\captionof{table}{十人 \textbf{Optimal\_S*} 群体下的环境敏感性。}
+\label{tab:sensitivity}
+\vspace{2pt}
+\centering
+\small
+\begin{tabular}{@{}lcc@{}}
+  \toprule
+  \textbf{条件} & \textbf{信用点/天} & \textbf{说明} \\
+  \midrule
+  商店容量 300      & 230.13 & 每天浪费 3.35 信用点 \\
+  商店容量 400      & 233.43 & 已接近完全饱和 \\
+  商店容量 600      & 233.93 & 基本无瓶颈 \\
+  均匀分布          & 233.97 & 交流周期 2.56 天 \\
+  非均匀分布        & 223.12 & 收益下降 4.6\% \\
+  $\lambda=2.56$/天 & 201.35 & 无高配加成情形 \\
+  $\lambda=2.99$/天 & 233.97 & 典型配置 \\
+  $\lambda=3.03$/天 & 235.56 & 边际收益递减 \\
+  \bottomrule
+\end{tabular}
+\end{minipage}
+
+这些结果共同指向一个经验事实：系统对合作结构与线索分布偏态的敏感度，明显高于对高位线索生成速率的敏感度。当总生成速率达到约 3 条/天后，继续提高产出只会带来很有限的交流频率提升。
+
+\section{讨论}
+
+本文结果支持一个非常直接的策略原则：\textit{重复线索是流动资产，唯一线索是生产资本}。重复件在第一份之后不再提高自身凑齐集合的速度，因此赠出通常是高效的；而唯一线索不同，赠出它虽然会立即换来 20 信用点，却可能让下一次线索交流延迟数天，其长期机会成本明显更高。
+
+这一视角也解释了若干表面上“看起来合理”的策略为何表现不佳。完全利他似乎最合作，但它过度破坏了自身库存结构，并推高了过期损失；阈值策略看似保守，实则把有利可图的赠送推迟到拥塞已经发生之后；完全利己虽然保障了自身库存，却放弃了网络中大量本可实现的协作剩余。相比之下，只送重复正好利用了库存中机会成本最低的部分，同时保留了机会成本最高的关键唯一件。
+
+\textbf{Optimal\_S*} 与 \textbf{Optimal\_Targeted} 的区分也很重要。前者的优点在于自我执行性强，不容易被单边偏离所击败；后者则更适合作为明确协调规则，因为它能更快把重复件转移给正确对象，从而缩短交流周期并减少过期。换言之，本文模拟结果显示该系统存在一个轻微但清晰的“均衡最优”与“社会最优”错位。
+
+当然，本文仍有若干限制需要明确指出。其一，本文假设好友图为完全连通网络；其二，定向赠送默认玩家可以观察好友缺失线索类型；其三，访问行为使用固定参数的 Beta-Binomial 模型；其四，策略空间是有限离散集合，而非连续全空间搜索。这些限制不改变本文的核心比较结论，但确实限定了结论的外推范围。
+
+\section{结论}
+
+在本文的模型与实验设置下，最强的实务建议可以概括为三句话：不要送唯一线索；重复线索应尽快送出；若能观察好友缺失类型，则应优先定向赠送。就个体稳定性而言，“只送重复”是稳健策略；就协调绩效而言，“定向送重复”是本文观测到的最佳策略。
+
+更一般地说，明日方舟线索系统展示了一个典型的直播运营游戏微观经济现象：看似轻量的日常社交机制，也可以形成兼具个人理性、合作增益与协调摩擦的重复博弈结构。因此，它不仅是一个具体游戏机制的优化问题，也可以作为研究合作、拥塞与奖励分配的小型模型。
+
+\section*{Acknowledgements}
+
+作者感谢项目仓库维护者对模型假设、实验代码与原始输出结果的完整整理。
+
+\section*{Conflicts of Interest}
+
+作者声明不存在利益冲突。
+
+\section*{Funding}
+
+本研究未获得外部资助。
+
+\section*{Ethics Statement}
+
+不适用。
+
+\section*{References}
+
+\noindent [1] Must77. \textit{arknights-clue: Arknights clue gifting strategy study and simulator}. GitHub repository. Available online: \url{https://github.com/Must77/arknights-clue} (accessed on 13 April 2026).
+
+\medskip
+
+\noindent [2] Motwani, R.; Raghavan, P. \textit{Randomized Algorithms}; Cambridge University Press: Cambridge, UK, 1995.
+
+\medskip
+
+\noindent [3] Feller, W. \textit{An Introduction to Probability Theory and Its Applications}, Vol.~1, 3rd ed.; Wiley: New York, NY, USA, 1968.
+
+\medskip
+
+\noindent [4] Nash, J.F. Non-Cooperative Games. \textit{Annals of Mathematics} \textbf{1951}, \textit{54}, 286--295.
+
+\end{rubbishbody}
+
+\end{document}
